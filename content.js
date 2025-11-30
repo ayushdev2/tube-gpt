@@ -59,13 +59,13 @@
   // Method 1: Use YouTube's internal player response
   async function tryPlayerResponse() {
     try {
-      const ytInitialPlayerResponse = window.ytInitialPlayerResponse;
+      const playerResponse = await getPlayerResponse();
       
-      if (!ytInitialPlayerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks) {
+      if (!playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks) {
         return null;
       }
 
-      const tracks = ytInitialPlayerResponse.captions.playerCaptionsTracklistRenderer.captionTracks;
+      const tracks = playerResponse.captions.playerCaptionsTracklistRenderer.captionTracks;
       
       // Prefer English, then auto-generated, then first available
       const track = tracks.find(t => t.languageCode === 'en' && !t.kind) ||
@@ -75,7 +75,10 @@
       if (!track?.baseUrl) return null;
 
       const response = await fetch(track.baseUrl);
+      if (!response.ok) return null;
+      
       const xml = await response.text();
+      if (!xml.includes('<text')) return null;
       
       return parseTranscriptXml(xml);
     } catch (error) {
@@ -88,33 +91,24 @@
   async function tryTimedTextApi() {
     try {
       const videoId = new URLSearchParams(window.location.search).get('v');
+      if (!videoId) return null;
       
-      // Try JSON format first
-      const jsonUrl = `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=json3`;
-      let response = await fetch(jsonUrl);
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.events) {
-          return data.events
-            .filter(e => e.segs)
-            .map(e => ({
-              text: e.segs.map(s => s.utf8 || '').join('').trim(),
-              start: (e.tStartMs || 0) / 1000,
-              duration: (e.dDurationMs || 0) / 1000
-            }))
-            .filter(item => item.text);
-        }
-      }
-
-      // Try XML format
-      const xmlUrl = `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en`;
-      response = await fetch(xmlUrl);
-      
-      if (response.ok) {
-        const xml = await response.text();
-        if (xml.includes('<text')) {
-          return parseTranscriptXml(xml);
+      // Try to get caption tracks from the page
+      const playerResponse = await getPlayerResponse();
+      if (playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks) {
+        const tracks = playerResponse.captions.playerCaptionsTracklistRenderer.captionTracks;
+        const track = tracks.find(t => t.languageCode === 'en' && !t.kind) ||
+                      tracks.find(t => t.languageCode === 'en') ||
+                      tracks[0];
+        
+        if (track?.baseUrl) {
+          const response = await fetch(track.baseUrl);
+          if (response.ok) {
+            const xml = await response.text();
+            if (xml.includes('<text')) {
+              return parseTranscriptXml(xml);
+            }
+          }
         }
       }
 
@@ -123,6 +117,32 @@
       console.error('tryTimedTextApi error:', error);
       return null;
     }
+  }
+  
+  // Get player response from page
+  async function getPlayerResponse() {
+    // Try window variable first
+    if (window.ytInitialPlayerResponse) {
+      return window.ytInitialPlayerResponse;
+    }
+    
+    // Try to extract from page scripts
+    const scripts = document.querySelectorAll('script');
+    for (const script of scripts) {
+      const text = script.textContent || '';
+      if (text.includes('ytInitialPlayerResponse')) {
+        const match = text.match(/ytInitialPlayerResponse\s*=\s*({.+?});/s);
+        if (match) {
+          try {
+            return JSON.parse(match[1]);
+          } catch (e) {
+            continue;
+          }
+        }
+      }
+    }
+    
+    return null;
   }
 
   // Method 3: Scrape transcript panel

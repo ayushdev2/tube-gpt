@@ -362,86 +362,23 @@ function showTranscriptError(message) {
 
 // Transcript extraction function (runs in page context)
 function extractTranscript() {
-  return new Promise(async (resolve) => {
-    try {
-      // Method 1: Try to get from YouTube's internal data
-      const ytInitialPlayerResponse = window.ytInitialPlayerResponse;
-      
-      if (ytInitialPlayerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks) {
-        const tracks = ytInitialPlayerResponse.captions.playerCaptionsTracklistRenderer.captionTracks;
-        const track = tracks.find(t => t.languageCode === 'en') || tracks[0];
-        
-        if (track?.baseUrl) {
-          const response = await fetch(track.baseUrl);
-          const xml = await response.text();
-          const transcript = parseTranscriptXml(xml);
-          resolve({ success: true, transcript });
-          return;
-        }
-      }
-      
-      // Method 2: Try to get from timedtext API
-      const videoId = new URLSearchParams(window.location.search).get('v');
-      const apiUrl = `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=json3`;
-      
-      const response = await fetch(apiUrl);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.events) {
-          const transcript = data.events
-            .filter(e => e.segs)
-            .map(e => ({
-              text: e.segs.map(s => s.utf8).join(''),
-              start: e.tStartMs / 1000,
-              duration: e.dDurationMs / 1000
-            }));
-          resolve({ success: true, transcript });
-          return;
-        }
-      }
-      
-      // Method 3: Try to scrape from transcript panel
-      const transcriptButton = document.querySelector('[aria-label="Show transcript"]');
-      if (transcriptButton) {
-        transcriptButton.click();
-        await new Promise(r => setTimeout(r, 1000));
-        
-        const transcriptItems = document.querySelectorAll('ytd-transcript-segment-renderer');
-        if (transcriptItems.length > 0) {
-          const transcript = Array.from(transcriptItems).map(item => {
-            const timestamp = item.querySelector('.segment-timestamp')?.textContent?.trim() || '0:00';
-            const text = item.querySelector('.segment-text')?.textContent?.trim() || '';
-            return {
-              text,
-              start: parseTimestamp(timestamp),
-              duration: 0
-            };
-          });
-          
-          // Close transcript panel
-          transcriptButton.click();
-          
-          resolve({ success: true, transcript });
-          return;
-        }
-      }
-      
-      resolve({ success: false, error: 'No transcript available for this video' });
-    } catch (error) {
-      resolve({ success: false, error: error.message });
-    }
-  });
-  
+  // Helper functions defined inside to be available in page context
   function parseTranscriptXml(xml) {
     const parser = new DOMParser();
     const doc = parser.parseFromString(xml, 'text/xml');
     const texts = doc.querySelectorAll('text');
     
     return Array.from(texts).map(text => ({
-      text: text.textContent?.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/&quot;/g, '"') || '',
+      text: decodeHtml(text.textContent || ''),
       start: parseFloat(text.getAttribute('start') || '0'),
       duration: parseFloat(text.getAttribute('dur') || '0')
-    }));
+    })).filter(item => item.text.trim());
+  }
+  
+  function decodeHtml(text) {
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = text;
+    return textarea.value;
   }
   
   function parseTimestamp(timestamp) {
@@ -453,6 +390,123 @@ function extractTranscript() {
     }
     return 0;
   }
+  
+  async function getPlayerResponse() {
+    // Try window variable first
+    if (window.ytInitialPlayerResponse) {
+      return window.ytInitialPlayerResponse;
+    }
+    
+    // Try to extract from page scripts
+    const scripts = document.querySelectorAll('script');
+    for (const script of scripts) {
+      const text = script.textContent || '';
+      if (text.includes('ytInitialPlayerResponse')) {
+        const match = text.match(/ytInitialPlayerResponse\s*=\s*({.+?});/s);
+        if (match) {
+          try {
+            return JSON.parse(match[1]);
+          } catch (e) {
+            continue;
+          }
+        }
+      }
+    }
+    
+    // Try ytInitialData as fallback
+    if (window.ytInitialData) {
+      return window.ytInitialData;
+    }
+    
+    return null;
+  }
+
+  // Main extraction logic
+  return (async () => {
+    try {
+      // Method 1: Try to get from YouTube's internal data
+      const playerResponse = await getPlayerResponse();
+      
+      if (playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks) {
+        const tracks = playerResponse.captions.playerCaptionsTracklistRenderer.captionTracks;
+        const track = tracks.find(t => t.languageCode === 'en' && !t.kind) ||
+                      tracks.find(t => t.languageCode === 'en') ||
+                      tracks[0];
+        
+        if (track?.baseUrl) {
+          try {
+            const response = await fetch(track.baseUrl);
+            if (response.ok) {
+              const xml = await response.text();
+              if (xml.includes('<text')) {
+                const transcript = parseTranscriptXml(xml);
+                if (transcript.length > 0) {
+                  return { success: true, transcript };
+                }
+              }
+            }
+          } catch (fetchError) {
+            console.error('Fetch error:', fetchError);
+          }
+        }
+      }
+      
+      // Method 2: Try to scrape from transcript panel UI
+      const transcriptButton = document.querySelector(
+        'button[aria-label="Show transcript"], ' +
+        '[aria-label="Show transcript"], ' +
+        'ytd-video-description-transcript-section-renderer button'
+      );
+      
+      if (transcriptButton) {
+        transcriptButton.click();
+        await new Promise(r => setTimeout(r, 1500));
+        
+        const transcriptItems = document.querySelectorAll(
+          'ytd-transcript-segment-renderer, ' +
+          'yt-transcript-segment-renderer'
+        );
+        
+        if (transcriptItems.length > 0) {
+          const transcript = Array.from(transcriptItems).map(item => {
+            const timestampEl = item.querySelector('.segment-timestamp, [class*="timestamp"]');
+            const textEl = item.querySelector('.segment-text, [class*="segment-text"], yt-formatted-string');
+            
+            const timestamp = timestampEl?.textContent?.trim() || '0:00';
+            const text = textEl?.textContent?.trim() || '';
+            
+            return {
+              text,
+              start: parseTimestamp(timestamp),
+              duration: 0
+            };
+          }).filter(item => item.text);
+          
+          // Close transcript panel
+          const closeBtn = document.querySelector(
+            'button[aria-label="Close transcript"], ' +
+            '[aria-label="Close"]'
+          );
+          if (closeBtn) {
+            closeBtn.click();
+          } else {
+            transcriptButton.click();
+          }
+          
+          if (transcript.length > 0) {
+            return { success: true, transcript };
+          }
+        }
+        
+        // Close if opened but no items found
+        transcriptButton.click();
+      }
+      
+      return { success: false, error: 'No transcript available for this video. The video may not have captions enabled.' };
+    } catch (error) {
+      return { success: false, error: error.message || 'Failed to extract transcript' };
+    }
+  })();
 }
 
 // ===== Question & Answer =====

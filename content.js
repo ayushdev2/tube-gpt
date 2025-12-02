@@ -251,70 +251,51 @@
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  // ===== Floating Screenshot Button =====
+  // ===== Floating Screenshot Button in YouTube Controls =====
   function createFloatingButton() {
     // Check if already exists
     if (document.getElementById('tubegpt-screenshot-btn')) return;
     
-    // Wait for player to be ready
-    const player = document.querySelector('#movie_player, .html5-video-player');
-    if (!player) {
+    // Find YouTube's right controls (where fullscreen button is)
+    const rightControls = document.querySelector('.ytp-right-controls');
+    if (!rightControls) {
       setTimeout(createFloatingButton, 1000);
       return;
     }
 
-    // Create floating button
+    // Create button that matches YouTube's style
     const btn = document.createElement('button');
     btn.id = 'tubegpt-screenshot-btn';
+    btn.className = 'ytp-button';
     btn.title = 'Take Screenshot (TubeGPT)';
+    btn.setAttribute('aria-label', 'Take Screenshot');
     btn.innerHTML = `
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-        <circle cx="12" cy="13" r="4"/>
+      <svg height="100%" version="1.1" viewBox="0 0 36 36" width="100%">
+        <path d="M12 8l2-3h8l2 3h5c1.1 0 2 .9 2 2v14c0 1.1-.9 2-2 2H7c-1.1 0-2-.9-2-2V10c0-1.1.9-2 2-2h5zm6 13c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4z" fill="#fff"/>
       </svg>
     `;
     
-    // Styles
+    // YouTube-like button styles
     btn.style.cssText = `
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      z-index: 9999;
-      width: 40px;
-      height: 40px;
+      width: 48px;
+      height: 100%;
       border: none;
-      border-radius: 8px;
-      background: rgba(0, 0, 0, 0.7);
-      color: white;
+      background: transparent;
       cursor: pointer;
-      display: flex;
+      display: inline-flex;
       align-items: center;
       justify-content: center;
-      transition: all 0.2s ease;
-      opacity: 0;
-      pointer-events: none;
+      opacity: 0.9;
+      transition: opacity 0.1s;
     `;
-
-    // Show on hover
-    player.addEventListener('mouseenter', () => {
-      btn.style.opacity = '1';
-      btn.style.pointerEvents = 'auto';
-    });
-    
-    player.addEventListener('mouseleave', () => {
-      btn.style.opacity = '0';
-      btn.style.pointerEvents = 'none';
-    });
 
     // Hover effect
     btn.addEventListener('mouseenter', () => {
-      btn.style.background = 'rgba(99, 102, 241, 0.9)';
-      btn.style.transform = 'scale(1.1)';
+      btn.style.opacity = '1';
     });
     
     btn.addEventListener('mouseleave', () => {
-      btn.style.background = 'rgba(0, 0, 0, 0.7)';
-      btn.style.transform = 'scale(1)';
+      btn.style.opacity = '0.9';
     });
 
     // Click handler
@@ -330,8 +311,13 @@
       }
     });
 
-    player.style.position = 'relative';
-    player.appendChild(btn);
+    // Insert before fullscreen button (first child of right controls)
+    const fullscreenBtn = rightControls.querySelector('.ytp-fullscreen-button');
+    if (fullscreenBtn) {
+      rightControls.insertBefore(btn, fullscreenBtn);
+    } else {
+      rightControls.insertBefore(btn, rightControls.firstChild);
+    }
   }
 
   // Capture and save screenshot

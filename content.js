@@ -91,14 +91,30 @@ console.log('[TubeGPT] Content script loading...');
   }
 
   // ===== Floating Screenshot Button =====
+  let retryCount = 0;
+  
   function createScreenshotButton() {
-    if (document.getElementById('tubegpt-ss-btn')) return;
-    
-    const player = document.getElementById('movie_player');
-    if (!player) {
-      setTimeout(createScreenshotButton, 1000);
+    if (document.getElementById('tubegpt-ss-btn')) {
+      console.log('[TubeGPT] Button already exists');
       return;
     }
+    
+    // Try multiple selectors
+    const player = document.getElementById('movie_player') 
+      || document.querySelector('.html5-video-player')
+      || document.querySelector('#player-container-inner')
+      || document.querySelector('ytd-player');
+    
+    if (!player) {
+      retryCount++;
+      console.log('[TubeGPT] Player not found, retry', retryCount);
+      if (retryCount < 20) {
+        setTimeout(createScreenshotButton, 500);
+      }
+      return;
+    }
+
+    console.log('[TubeGPT] Found player:', player.id || player.className);
 
     const btn = document.createElement('button');
     btn.id = 'tubegpt-ss-btn';
@@ -215,8 +231,10 @@ console.log('[TubeGPT] Content script loading...');
 
   // ===== Initialize =====
   function init() {
+    console.log('[TubeGPT] Init called, path:', location.pathname);
     if (location.pathname === '/watch') {
-      setTimeout(createScreenshotButton, 1500);
+      retryCount = 0;
+      setTimeout(createScreenshotButton, 1000);
     }
   }
 

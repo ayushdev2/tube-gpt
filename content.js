@@ -255,86 +255,149 @@ console.log('[TubeGPT] Content script starting...');
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  // ===== Floating Screenshot Button in YouTube Controls =====
-  let buttonRetryCount = 0;
-  const MAX_RETRIES = 10;
+  // ===== Floating Screenshot Button (Always Visible) =====
+  function injectStyles() {
+    if (document.getElementById('tubegpt-styles')) return;
+    
+    const style = document.createElement('style');
+    style.id = 'tubegpt-styles';
+    style.textContent = `
+      #tubegpt-screenshot-btn {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        z-index: 2147483647;
+        width: 44px;
+        height: 44px;
+        border: none;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.75);
+        color: white;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        opacity: 0;
+        pointer-events: none;
+      }
+      
+      #tubegpt-screenshot-btn:hover {
+        background: #6366f1;
+        transform: scale(1.1);
+      }
+      
+      #tubegpt-screenshot-btn:active {
+        transform: scale(0.95);
+      }
+      
+      #tubegpt-screenshot-btn svg {
+        width: 22px;
+        height: 22px;
+      }
+      
+      /* Show button when hovering over player */
+      #movie_player:hover #tubegpt-screenshot-btn,
+      .html5-video-player:hover #tubegpt-screenshot-btn {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      
+      /* Keep visible when hovering the button itself */
+      #tubegpt-screenshot-btn:hover {
+        opacity: 1 !important;
+        pointer-events: auto !important;
+      }
+      
+      @keyframes tubegpt-pulse {
+        0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7); }
+        70% { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+      }
+      
+      @keyframes tubegpt-slide-up {
+        from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+        to { opacity: 1; transform: translateX(-50%) translateY(0); }
+      }
+      
+      #tubegpt-toast {
+        position: fixed;
+        bottom: 100px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 2147483647;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 20px;
+        background: #10b981;
+        color: white;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 14px;
+        font-weight: 500;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        animation: tubegpt-slide-up 0.3s ease;
+      }
+      
+      #tubegpt-toast.error {
+        background: #ef4444;
+      }
+    `;
+    document.head.appendChild(style);
+  }
   
   function createFloatingButton() {
     // Check if already exists
     if (document.getElementById('tubegpt-screenshot-btn')) {
-      console.log('[TubeGPT] Screenshot button already exists');
       return;
     }
     
-    // Find YouTube's right controls (where fullscreen button is)
-    const rightControls = document.querySelector('.ytp-right-controls');
-    if (!rightControls) {
-      buttonRetryCount++;
-      if (buttonRetryCount < MAX_RETRIES) {
-        console.log('[TubeGPT] Waiting for controls... retry', buttonRetryCount);
-        setTimeout(createFloatingButton, 1000);
-      }
+    // Find YouTube player
+    const player = document.getElementById('movie_player') || document.querySelector('.html5-video-player');
+    if (!player) {
+      // Retry after a short delay
+      setTimeout(createFloatingButton, 500);
       return;
     }
 
-    console.log('[TubeGPT] Found right controls, adding screenshot button');
+    // Inject styles first
+    injectStyles();
 
-    // Create button that matches YouTube's style
+    // Create button
     const btn = document.createElement('button');
     btn.id = 'tubegpt-screenshot-btn';
-    btn.className = 'ytp-button tubegpt-screenshot';
     btn.title = 'Take Screenshot (TubeGPT)';
     btn.setAttribute('aria-label', 'Take Screenshot');
     btn.innerHTML = `
-      <svg height="100%" version="1.1" viewBox="0 0 36 36" width="100%">
-        <path d="M12 8l2-3h8l2 3h5c1.1 0 2 .9 2 2v14c0 1.1-.9 2-2 2H7c-1.1 0-2-.9-2-2V10c0-1.1.9-2 2-2h5zm6 13c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4z" fill="#fff"/>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+        <circle cx="12" cy="13" r="4"/>
       </svg>
     `;
-    
-    // YouTube-like button styles
-    btn.style.cssText = `
-      width: 48px;
-      height: 100%;
-      border: none;
-      background: transparent;
-      cursor: pointer;
-      display: inline-flex !important;
-      align-items: center;
-      justify-content: center;
-      opacity: 0.9;
-      transition: opacity 0.1s;
-      vertical-align: top;
-    `;
-
-    // Hover effect
-    btn.addEventListener('mouseenter', () => {
-      btn.style.opacity = '1';
-    });
-    
-    btn.addEventListener('mouseleave', () => {
-      btn.style.opacity = '0.9';
-    });
 
     // Click handler
     btn.addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
       
+      // Visual feedback
+      btn.style.animation = 'tubegpt-pulse 0.5s ease';
+      setTimeout(() => btn.style.animation = '', 500);
+      
       const result = await captureAndSaveScreenshot();
-      if (result.success) {
-        showFloatingToast('Screenshot saved!');
-      } else {
-        showFloatingToast('Failed to capture', true);
-      }
+      showFloatingToast(result.success ? 'Screenshot saved!' : 'Failed to capture', !result.success);
     });
 
-    // Insert before fullscreen button (first child of right controls)
-    const fullscreenBtn = rightControls.querySelector('.ytp-fullscreen-button');
-    if (fullscreenBtn) {
-      rightControls.insertBefore(btn, fullscreenBtn);
-    } else {
-      rightControls.insertBefore(btn, rightControls.firstChild);
+    // Ensure player has position for absolute child
+    const playerStyle = window.getComputedStyle(player);
+    if (playerStyle.position === 'static') {
+      player.style.position = 'relative';
     }
+    
+    player.appendChild(btn);
+    console.log('[TubeGPT] Screenshot button added to player');
   }
 
   // Capture and save screenshot
@@ -380,7 +443,7 @@ console.log('[TubeGPT] Content script starting...');
       
       return { success: true };
     } catch (error) {
-      console.error('Screenshot error:', error);
+      console.error('[TubeGPT] Screenshot error:', error);
       return { success: false, error: error.message };
     }
   }
@@ -393,6 +456,7 @@ console.log('[TubeGPT] Content script starting...');
     
     const toast = document.createElement('div');
     toast.id = 'tubegpt-toast';
+    if (isError) toast.classList.add('error');
     toast.innerHTML = `
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         ${isError 
@@ -403,39 +467,6 @@ console.log('[TubeGPT] Content script starting...');
       <span>${message}</span>
     `;
     
-    toast.style.cssText = `
-      position: fixed;
-      bottom: 80px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 99999;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 20px;
-      background: ${isError ? '#ef4444' : '#10b981'};
-      color: white;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 14px;
-      font-weight: 500;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      animation: tubegpt-slide-up 0.3s ease;
-    `;
-    
-    // Add animation keyframes
-    if (!document.getElementById('tubegpt-styles')) {
-      const style = document.createElement('style');
-      style.id = 'tubegpt-styles';
-      style.textContent = `
-        @keyframes tubegpt-slide-up {
-          from { opacity: 0; transform: translateX(-50%) translateY(20px); }
-          to { opacity: 1; transform: translateX(-50%) translateY(0); }
-        }
-      `;
-      document.head.appendChild(style);
-    }
-    
     document.body.appendChild(toast);
     
     setTimeout(() => {
@@ -445,11 +476,18 @@ console.log('[TubeGPT] Content script starting...');
     }, 2000);
   }
 
-  // Initialize floating button when page loads
+  // Initialize floating button
   function initFloatingButton() {
     if (window.location.pathname === '/watch') {
-      createFloatingButton();
+      // Small delay to let YouTube's player initialize
+      setTimeout(createFloatingButton, 1000);
     }
+  }
+
+  // Clean up button when leaving video page
+  function removeFloatingButton() {
+    const btn = document.getElementById('tubegpt-screenshot-btn');
+    if (btn) btn.remove();
   }
 
   // Watch for navigation (YouTube is SPA)
@@ -457,7 +495,8 @@ console.log('[TubeGPT] Content script starting...');
   new MutationObserver(() => {
     if (location.href !== lastUrl) {
       lastUrl = location.href;
-      setTimeout(initFloatingButton, 1000);
+      removeFloatingButton();
+      initFloatingButton();
     }
   }).observe(document.body, { subtree: true, childList: true });
 
@@ -468,6 +507,5 @@ console.log('[TubeGPT] Content script starting...');
     initFloatingButton();
   }
 
-  // Notify that content script is ready
-  console.log('TubeGPT content script loaded');
+  console.log('[TubeGPT] Content script initialized');
 })();

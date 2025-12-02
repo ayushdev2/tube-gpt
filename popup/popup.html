@@ -18,6 +18,13 @@
         <span class="logo-text">TubeGPT</span>
       </div>
       <div class="header-actions">
+        <button id="screenshotsBtn" class="icon-btn" title="Screenshots">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21,15 16,10 5,21"/>
+          </svg>
+        </button>
         <button id="historyBtn" class="icon-btn" title="History">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"/>
@@ -74,6 +81,35 @@
             <h3 id="videoTitle" class="video-title">Loading video...</h3>
             <span id="videoDuration" class="video-duration"></span>
           </div>
+        </div>
+
+        <!-- Video Controls - Screenshot & Play/Pause -->
+        <div class="video-controls">
+          <button id="screenshotBtn" class="btn btn-control" title="Take Screenshot">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+            Screenshot
+          </button>
+          <button id="playPauseBtn" class="btn btn-control" title="Play/Pause Video">
+            <svg id="playIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="5,3 19,12 5,21"/>
+            </svg>
+            <svg id="pauseIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="hidden">
+              <rect x="6" y="4" width="4" height="16"/>
+              <rect x="14" y="4" width="4" height="16"/>
+            </svg>
+            <span id="playPauseText">Play</span>
+          </button>
+        </div>
+
+        <!-- Screenshot Toast -->
+        <div id="screenshotToast" class="screenshot-toast hidden">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20,6 9,17 4,12"/>
+          </svg>
+          <span>Screenshot saved!</span>
         </div>
 
         <!-- Transcript Status -->
@@ -242,6 +278,39 @@
           </svg>
           <p>No history yet</p>
           <span>Your questions will appear here</span>
+        </div>
+      </div>
+
+      <!-- Screenshots Panel -->
+      <div id="screenshotsPanel" class="screenshots-panel hidden">
+        <div class="screenshots-header">
+          <button id="backFromScreenshots" class="icon-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="19" y1="12" x2="5" y2="12"/>
+              <polyline points="12,19 5,12 12,5"/>
+            </svg>
+          </button>
+          <h2>Screenshots</h2>
+          <button id="downloadAllBtn" class="icon-btn" title="Download All">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7,10 12,15 17,10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </button>
+        </div>
+        
+        <div id="screenshotsList" class="screenshots-grid">
+          <!-- Screenshots will be populated dynamically -->
+        </div>
+
+        <div id="emptyScreenshots" class="empty-state">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+          <p>No screenshots yet</p>
+          <span>Take screenshots while watching videos</span>
         </div>
       </div>
     </main>

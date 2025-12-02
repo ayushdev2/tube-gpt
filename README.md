@@ -5,6 +5,14 @@ A modern Chrome extension that lets you ask questions about YouTube videos using
 ![TubeGPT](https://img.shields.io/badge/Chrome-Extension-green?logo=googlechrome)
 ![Gemini](https://img.shields.io/badge/Powered%20by-Gemini-blue?logo=google)
 
+## Demo
+
+[![Watch Demo](https://img.shields.io/badge/▶️_Watch_Demo-Google_Drive-4285F4?style=for-the-badge&logo=googledrive&logoColor=white)](https://drive.google.com/file/d/1jSOkq6owIjoJ3fn_sJByF-WIrVpg0f2U/view?usp=sharing)
+
+<a href="https://drive.google.com/file/d/1jSOkq6owIjoJ3fn_sJByF-WIrVpg0f2U/view?usp=sharing">
+  <img src="https://drive.google.com/thumbnail?id=1jSOkq6owIjoJ3fn_sJByF-WIrVpg0f2U&sz=w1000" alt="TubeGPT Demo" width="600">
+</a>
+
 ## Features
 
 ✨ **Smart Q&A** - Ask any question about the video content and get accurate answers  

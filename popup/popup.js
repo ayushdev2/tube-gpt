@@ -5,7 +5,9 @@ const state = {
   videoInfo: null,
   currentVideoId: null,
   history: [],
+  screenshots: [],
   isOnYouTube: false,
+  isPlaying: false,
 };
 
 // ===== DOM Elements =====
@@ -32,6 +34,20 @@ const elements = {
   backFromHistory: document.getElementById('backFromHistory'),
   historyList: document.getElementById('historyList'),
   emptyHistory: document.getElementById('emptyHistory'),
+  
+  // Screenshots
+  screenshotsPanel: document.getElementById('screenshotsPanel'),
+  screenshotsBtn: document.getElementById('screenshotsBtn'),
+  backFromScreenshots: document.getElementById('backFromScreenshots'),
+  screenshotsList: document.getElementById('screenshotsList'),
+  emptyScreenshots: document.getElementById('emptyScreenshots'),
+  downloadAllBtn: document.getElementById('downloadAllBtn'),
+  screenshotBtn: document.getElementById('screenshotBtn'),
+  screenshotToast: document.getElementById('screenshotToast'),
+  playPauseBtn: document.getElementById('playPauseBtn'),
+  playIcon: document.getElementById('playIcon'),
+  pauseIcon: document.getElementById('pauseIcon'),
+  playPauseText: document.getElementById('playPauseText'),
   
   // Video Info
   videoThumbnail: document.getElementById('videoThumbnail'),
@@ -66,9 +82,10 @@ async function init() {
 }
 
 async function loadState() {
-  const stored = await chrome.storage.local.get(['apiKey', 'history']);
+  const stored = await chrome.storage.local.get(['apiKey', 'history', 'screenshots']);
   state.apiKey = stored.apiKey || null;
   state.history = stored.history || [];
+  state.screenshots = stored.screenshots || [];
 }
 
 // ===== Event Listeners =====
@@ -84,6 +101,13 @@ function setupEventListeners() {
   // History Panel
   elements.historyBtn.addEventListener('click', openHistory);
   elements.backFromHistory.addEventListener('click', closeHistory);
+  
+  // Screenshots Panel
+  elements.screenshotsBtn.addEventListener('click', openScreenshots);
+  elements.backFromScreenshots.addEventListener('click', closeScreenshots);
+  elements.downloadAllBtn.addEventListener('click', downloadAllScreenshots);
+  elements.screenshotBtn.addEventListener('click', takeScreenshot);
+  elements.playPauseBtn.addEventListener('click', togglePlayPause);
   
   // Transcript
   elements.loadTranscriptBtn.addEventListener('click', loadTranscript);
@@ -582,7 +606,7 @@ USER QUESTION: ${question}
 
 Please provide a helpful answer with timestamps where relevant:`;
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${state.apiKey}`, {
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${state.apiKey}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -618,10 +642,31 @@ function formatAnswer(text) {
     return `<span class="timestamp" data-time="${seconds}">${timestamp}</span>`;
   });
   
+  // Convert markdown bold (**text** or __text__) to <strong>
+  formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  formatted = formatted.replace(/__(.+?)__/g, '<strong>$1</strong>');
+  
+  // Convert markdown italic (*text* or _text_) to <em>
+  formatted = formatted.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  formatted = formatted.replace(/_([^_]+)_/g, '<em>$1</em>');
+  
+  // Convert bullet points (lines starting with * or -)
+  formatted = formatted.replace(/^[\*\-]\s+(.+)$/gm, '<li>$1</li>');
+  
+  // Wrap consecutive <li> items in <ul>
+  formatted = formatted.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+  
   // Convert line breaks to paragraphs
   formatted = formatted
     .split('\n\n')
-    .map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+    .map(p => {
+      p = p.trim();
+      if (!p) return '';
+      // Don't wrap if already contains block elements
+      if (p.startsWith('<ul>') || p.startsWith('<li>')) return p;
+      return `<p>${p.replace(/\n/g, '<br>')}</p>`;
+    })
+    .filter(p => p)
     .join('');
   
   return formatted;
@@ -730,4 +775,229 @@ function formatDate(timestamp) {
   if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
   
   return date.toLocaleDateString();
+}
+
+// ===== Screenshot Functions =====
+async function takeScreenshot() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    
+    // Capture the video frame
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: captureVideoFrame
+    });
+    
+    if (results?.[0]?.result?.success) {
+      const screenshot = {
+        id: Date.now(),
+        dataUrl: results[0].result.dataUrl,
+        timestamp: results[0].result.timestamp,
+        videoId: state.currentVideoId,
+        videoTitle: state.videoInfo?.title || 'Unknown Video',
+        createdAt: Date.now()
+      };
+      
+      state.screenshots.push(screenshot);
+      
+      // Keep only last 100 screenshots to manage storage
+      if (state.screenshots.length > 100) {
+        state.screenshots = state.screenshots.slice(-100);
+      }
+      
+      await chrome.storage.local.set({ screenshots: state.screenshots });
+      
+      // Show success toast
+      showScreenshotToast();
+    } else {
+      console.error('Failed to capture screenshot:', results?.[0]?.result?.error);
+    }
+  } catch (error) {
+    console.error('Error taking screenshot:', error);
+  }
+}
+
+function captureVideoFrame() {
+  try {
+    const video = document.querySelector('video');
+    if (!video) {
+      return { success: false, error: 'No video found' };
+    }
+    
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    const dataUrl = canvas.toDataURL('image/png');
+    const timestamp = video.currentTime;
+    
+    return { success: true, dataUrl, timestamp };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function showScreenshotToast() {
+  elements.screenshotToast.classList.remove('hidden');
+  setTimeout(() => {
+    elements.screenshotToast.classList.add('hidden');
+  }, 2000);
+}
+
+async function togglePlayPause() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        const video = document.querySelector('video');
+        if (video) {
+          if (video.paused) {
+            video.play();
+            return { isPlaying: true };
+          } else {
+            video.pause();
+            return { isPlaying: false };
+          }
+        }
+        return { isPlaying: false };
+      }
+    });
+    
+    if (results?.[0]?.result) {
+      state.isPlaying = results[0].result.isPlaying;
+      updatePlayPauseButton();
+    }
+  } catch (error) {
+    console.error('Error toggling play/pause:', error);
+  }
+}
+
+function updatePlayPauseButton() {
+  if (state.isPlaying) {
+    elements.playIcon.classList.add('hidden');
+    elements.pauseIcon.classList.remove('hidden');
+    elements.playPauseText.textContent = 'Pause';
+  } else {
+    elements.playIcon.classList.remove('hidden');
+    elements.pauseIcon.classList.add('hidden');
+    elements.playPauseText.textContent = 'Play';
+  }
+}
+
+// ===== Screenshots Panel =====
+function openScreenshots() {
+  elements.screenshotsPanel.classList.remove('hidden');
+  renderScreenshots();
+}
+
+function closeScreenshots() {
+  elements.screenshotsPanel.classList.add('hidden');
+}
+
+function renderScreenshots() {
+  // Filter screenshots for current video
+  const videoScreenshots = state.screenshots.filter(s => s.videoId === state.currentVideoId);
+  
+  if (videoScreenshots.length === 0) {
+    elements.screenshotsList.classList.add('hidden');
+    elements.emptyScreenshots.classList.remove('hidden');
+    return;
+  }
+  
+  elements.emptyScreenshots.classList.add('hidden');
+  elements.screenshotsList.classList.remove('hidden');
+  
+  elements.screenshotsList.innerHTML = videoScreenshots
+    .slice()
+    .reverse()
+    .map(screenshot => `
+      <div class="screenshot-item" data-id="${screenshot.id}">
+        <img src="${screenshot.dataUrl}" alt="Screenshot at ${formatTimestampShort(screenshot.timestamp)}">
+        <div class="screenshot-item-overlay">
+          <span class="screenshot-timestamp">${formatTimestampShort(screenshot.timestamp)}</span>
+          <div class="screenshot-actions">
+            <button class="screenshot-action-btn download" data-id="${screenshot.id}" title="Download">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7,10 12,15 17,10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+            </button>
+            <button class="screenshot-action-btn delete" data-id="${screenshot.id}" title="Delete">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3,6 5,6 21,6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    `)
+    .join('');
+  
+  // Add event listeners
+  elements.screenshotsList.querySelectorAll('.screenshot-action-btn.download').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      downloadScreenshot(parseInt(btn.dataset.id));
+    });
+  });
+  
+  elements.screenshotsList.querySelectorAll('.screenshot-action-btn.delete').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteScreenshot(parseInt(btn.dataset.id));
+    });
+  });
+  
+  // Click on screenshot to seek video
+  elements.screenshotsList.querySelectorAll('.screenshot-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const screenshot = state.screenshots.find(s => s.id === parseInt(item.dataset.id));
+      if (screenshot) {
+        seekVideo(screenshot.timestamp);
+      }
+    });
+  });
+}
+
+function formatTimestampShort(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function downloadScreenshot(id) {
+  const screenshot = state.screenshots.find(s => s.id === id);
+  if (!screenshot) return;
+  
+  const link = document.createElement('a');
+  link.href = screenshot.dataUrl;
+  link.download = `screenshot_${formatTimestampShort(screenshot.timestamp).replace(':', '-')}.png`;
+  link.click();
+}
+
+async function deleteScreenshot(id) {
+  state.screenshots = state.screenshots.filter(s => s.id !== id);
+  await chrome.storage.local.set({ screenshots: state.screenshots });
+  renderScreenshots();
+}
+
+async function downloadAllScreenshots() {
+  const videoScreenshots = state.screenshots.filter(s => s.videoId === state.currentVideoId);
+  
+  for (const screenshot of videoScreenshots) {
+    const link = document.createElement('a');
+    link.href = screenshot.dataUrl;
+    link.download = `screenshot_${formatTimestampShort(screenshot.timestamp).replace(':', '-')}.png`;
+    link.click();
+    
+    // Small delay between downloads
+    await new Promise(r => setTimeout(r, 200));
+  }
 }

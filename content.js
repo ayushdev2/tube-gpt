@@ -1,8 +1,12 @@
 // Content script for TubeGPT
 // Handles transcript extraction and video seeking
 
+console.log('[TubeGPT] Content script starting...');
+
 (function() {
   'use strict';
+
+  console.log('[TubeGPT] Content script loaded on:', window.location.href);
 
   // Listen for messages from popup
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {

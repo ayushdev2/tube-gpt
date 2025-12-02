@@ -251,6 +251,220 @@
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
+  // ===== Floating Screenshot Button =====
+  function createFloatingButton() {
+    // Check if already exists
+    if (document.getElementById('tubegpt-screenshot-btn')) return;
+    
+    // Wait for player to be ready
+    const player = document.querySelector('#movie_player, .html5-video-player');
+    if (!player) {
+      setTimeout(createFloatingButton, 1000);
+      return;
+    }
+
+    // Create floating button
+    const btn = document.createElement('button');
+    btn.id = 'tubegpt-screenshot-btn';
+    btn.title = 'Take Screenshot (TubeGPT)';
+    btn.innerHTML = `
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+        <circle cx="12" cy="13" r="4"/>
+      </svg>
+    `;
+    
+    // Styles
+    btn.style.cssText = `
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 9999;
+      width: 40px;
+      height: 40px;
+      border: none;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      opacity: 0;
+      pointer-events: none;
+    `;
+
+    // Show on hover
+    player.addEventListener('mouseenter', () => {
+      btn.style.opacity = '1';
+      btn.style.pointerEvents = 'auto';
+    });
+    
+    player.addEventListener('mouseleave', () => {
+      btn.style.opacity = '0';
+      btn.style.pointerEvents = 'none';
+    });
+
+    // Hover effect
+    btn.addEventListener('mouseenter', () => {
+      btn.style.background = 'rgba(99, 102, 241, 0.9)';
+      btn.style.transform = 'scale(1.1)';
+    });
+    
+    btn.addEventListener('mouseleave', () => {
+      btn.style.background = 'rgba(0, 0, 0, 0.7)';
+      btn.style.transform = 'scale(1)';
+    });
+
+    // Click handler
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const result = await captureAndSaveScreenshot();
+      if (result.success) {
+        showFloatingToast('Screenshot saved!');
+      } else {
+        showFloatingToast('Failed to capture', true);
+      }
+    });
+
+    player.style.position = 'relative';
+    player.appendChild(btn);
+  }
+
+  // Capture and save screenshot
+  async function captureAndSaveScreenshot() {
+    try {
+      const video = document.querySelector('video');
+      if (!video) {
+        return { success: false, error: 'No video found' };
+      }
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      const dataUrl = canvas.toDataURL('image/png');
+      const timestamp = video.currentTime;
+      const videoId = new URLSearchParams(window.location.search).get('v');
+      const videoTitle = document.title.replace(' - YouTube', '');
+      
+      const screenshot = {
+        id: Date.now(),
+        dataUrl,
+        timestamp,
+        videoId,
+        videoTitle,
+        createdAt: Date.now()
+      };
+      
+      // Save to storage
+      const stored = await chrome.storage.local.get(['screenshots']);
+      let screenshots = stored.screenshots || [];
+      screenshots.push(screenshot);
+      
+      // Keep only last 100
+      if (screenshots.length > 100) {
+        screenshots = screenshots.slice(-100);
+      }
+      
+      await chrome.storage.local.set({ screenshots });
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Screenshot error:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Show floating toast notification
+  function showFloatingToast(message, isError = false) {
+    // Remove existing toast
+    const existing = document.getElementById('tubegpt-toast');
+    if (existing) existing.remove();
+    
+    const toast = document.createElement('div');
+    toast.id = 'tubegpt-toast';
+    toast.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        ${isError 
+          ? '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'
+          : '<polyline points="20,6 9,17 4,12"/>'
+        }
+      </svg>
+      <span>${message}</span>
+    `;
+    
+    toast.style.cssText = `
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 99999;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      background: ${isError ? '#ef4444' : '#10b981'};
+      color: white;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      animation: tubegpt-slide-up 0.3s ease;
+    `;
+    
+    // Add animation keyframes
+    if (!document.getElementById('tubegpt-styles')) {
+      const style = document.createElement('style');
+      style.id = 'tubegpt-styles';
+      style.textContent = `
+        @keyframes tubegpt-slide-up {
+          from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+          to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transition = 'opacity 0.3s ease';
+      setTimeout(() => toast.remove(), 300);
+    }, 2000);
+  }
+
+  // Initialize floating button when page loads
+  function initFloatingButton() {
+    if (window.location.pathname === '/watch') {
+      createFloatingButton();
+    }
+  }
+
+  // Watch for navigation (YouTube is SPA)
+  let lastUrl = location.href;
+  new MutationObserver(() => {
+    if (location.href !== lastUrl) {
+      lastUrl = location.href;
+      setTimeout(initFloatingButton, 1000);
+    }
+  }).observe(document.body, { subtree: true, childList: true });
+
+  // Initial load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initFloatingButton);
+  } else {
+    initFloatingButton();
+  }
+
   // Notify that content script is ready
   console.log('TubeGPT content script loaded');
 })();

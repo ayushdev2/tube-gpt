@@ -3,7 +3,7 @@
 A modern Chrome extension that lets you ask questions about YouTube videos using AI-powered transcript analysis.
 
 ![TubeGPT](https://img.shields.io/badge/Chrome-Extension-green?logo=googlechrome)
-![Gemini](https://img.shields.io/badge/Powered%20by-Gemini-blue?logo=google)
+![Gemini](https://img.shields.io/badge/Powered%20by-Gemini%202.0-blue?logo=google)
 
 ## Demo
 
@@ -15,18 +15,30 @@ A modern Chrome extension that lets you ask questions about YouTube videos using
 
 ## Features
 
-✨ **Smart Q&A** - Ask any question about the video content and get accurate answers  
-🕐 **Clickable Timestamps** - Jump to any referenced moment in the video  
-📜 **Auto Transcript Extraction** - Automatically pulls transcripts from YouTube videos  
-📚 **History Panel** - Keep track of your previous questions and answers  
-🔐 **Secure** - Your API key is stored locally and never shared  
-🎨 **Modern UI** - Clean, minimal design that feels like a research tool
+### 🤖 AI-Powered Learning
+- **Smart Q&A** - Ask any question about the video content and get accurate answers
+- **Clickable Timestamps** - Jump to any referenced moment in the video
+- **What to Watch Next** - AI recommends personalized learning paths based on your questions
+
+### 📸 Screenshot & Study Tools
+- **Floating Screenshot Button** - 📷 button on video player (works without opening popup)
+- **Screenshot Gallery** - View, download, and manage all your captures
+- **Play/Pause Controls** - Control video playback from the extension
+
+### 📚 Organization
+- **Auto Transcript Extraction** - Automatically pulls transcripts from YouTube videos
+- **History Panel** - Keep track of your previous questions and answers
+- **Export & Share** - Download screenshots for your notes
+
+### 🔐 Privacy & Design
+- **Secure** - Your API key is stored locally and never shared
+- **Modern UI** - Clean, minimal design that feels like a research tool
 
 ## Screenshots
 
-| API Key Setup | Main Interface | Answer with Timestamps |
-|---------------|----------------|------------------------|
-| Enter your Gemini API key | Load transcript and ask questions | Clickable timestamps in answers |
+| Main Interface | Screenshot Button | What to Watch Next |
+|----------------|-------------------|-------------------|
+| Ask questions about videos | 📷 floating on video player | AI-powered recommendations |
 
 ## Installation
 
@@ -60,6 +72,7 @@ A modern Chrome extension that lets you ask questions about YouTube videos using
 
 ## Usage
 
+### Ask Questions
 1. Navigate to any YouTube video
 2. Click the TubeGPT extension icon
 3. Click **"Load Transcript"** to extract the video's captions
@@ -67,13 +80,24 @@ A modern Chrome extension that lets you ask questions about YouTube videos using
 5. Press Enter or click the send button
 6. Click any timestamp in the answer to jump to that moment!
 
+### Take Screenshots
+- **Option 1**: Click the 📷 button floating on the YouTube video player
+- **Option 2**: Open extension popup and click "Screenshot" button
+- Access all screenshots from the gallery (📷 icon in header)
+
+### Get Recommendations
+1. Watch a video and ask some questions
+2. Click the ▶| icon in the extension header
+3. Click "Generate Recommendations"
+4. Get personalized suggestions for what to learn next!
+
 ## Project Structure
 
 ```
 tube-gpt/
 ├── manifest.json         # Chrome extension manifest (v3)
 ├── background.js         # Service worker for API calls
-├── content.js            # YouTube page interaction
+├── content.js            # YouTube page interaction & floating screenshot
 ├── popup/
 │   ├── popup.html        # Extension popup UI
 │   ├── popup.css         # Styles
@@ -85,23 +109,11 @@ tube-gpt/
 └── README.md
 ```
 
-## UI States
-
-The extension handles multiple states gracefully:
-
-- **Missing API Key** - Prompts user to add their Gemini API key
-- **Not on YouTube** - Shows message when not on a YouTube video page
-- **Ready** - Main interface with video info card
-- **Loading Transcript** - Spinner while extracting captions
-- **Transcript Error** - Clear error message with retry option
-- **Loading Answer** - Spinner while waiting for AI response
-- **Answer Display** - Formatted response with clickable timestamps
-
 ## Tech Stack
 
 - **Chrome Extension Manifest V3**
 - **Vanilla JavaScript** (no frameworks)
-- **Google Gemini 1.5 Flash API**
+- **Google Gemini 2.0 Flash API**
 - **YouTube Transcript API** (built-in extraction)
 
 ## Privacy

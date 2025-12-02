@@ -35,6 +35,16 @@ const elements = {
   historyList: document.getElementById('historyList'),
   emptyHistory: document.getElementById('emptyHistory'),
   
+  // Watch Next
+  watchNextPanel: document.getElementById('watchNextPanel'),
+  watchNextBtn: document.getElementById('watchNextBtn'),
+  backFromWatchNext: document.getElementById('backFromWatchNext'),
+  generateRecsBtn: document.getElementById('generateRecsBtn'),
+  watchNextInitial: document.getElementById('watchNextInitial'),
+  watchNextLoading: document.getElementById('watchNextLoading'),
+  watchNextResults: document.getElementById('watchNextResults'),
+  recsList: document.getElementById('recsList'),
+  
   // Screenshots
   screenshotsPanel: document.getElementById('screenshotsPanel'),
   screenshotsBtn: document.getElementById('screenshotsBtn'),
@@ -101,6 +111,11 @@ function setupEventListeners() {
   // History Panel
   elements.historyBtn.addEventListener('click', openHistory);
   elements.backFromHistory.addEventListener('click', closeHistory);
+  
+  // Watch Next Panel
+  elements.watchNextBtn.addEventListener('click', openWatchNext);
+  elements.backFromWatchNext.addEventListener('click', closeWatchNext);
+  elements.generateRecsBtn.addEventListener('click', generateRecommendations);
   
   // Screenshots Panel
   elements.screenshotsBtn.addEventListener('click', openScreenshots);
@@ -1000,4 +1015,153 @@ async function downloadAllScreenshots() {
     // Small delay between downloads
     await new Promise(r => setTimeout(r, 200));
   }
+}
+
+// ===== Watch Next / Recommendations =====
+function openWatchNext() {
+  elements.watchNextPanel.classList.remove('hidden');
+  // Reset to initial state
+  elements.watchNextInitial.classList.remove('hidden');
+  elements.watchNextLoading.classList.add('hidden');
+  elements.watchNextResults.classList.add('hidden');
+}
+
+function closeWatchNext() {
+  elements.watchNextPanel.classList.add('hidden');
+}
+
+async function generateRecommendations() {
+  if (!state.apiKey) {
+    alert('Please add your API key first');
+    return;
+  }
+  
+  // Show loading
+  elements.watchNextInitial.classList.add('hidden');
+  elements.watchNextLoading.classList.remove('hidden');
+  elements.watchNextResults.classList.add('hidden');
+  
+  try {
+    const recommendations = await getAIRecommendations();
+    renderRecommendations(recommendations);
+    
+    // Show results
+    elements.watchNextLoading.classList.add('hidden');
+    elements.watchNextResults.classList.remove('hidden');
+  } catch (error) {
+    console.error('Error generating recommendations:', error);
+    elements.watchNextLoading.classList.add('hidden');
+    elements.watchNextInitial.classList.remove('hidden');
+    alert('Failed to generate recommendations: ' + error.message);
+  }
+}
+
+async function getAIRecommendations() {
+  // Get user's questions from history for this video
+  const videoQuestions = state.history
+    .filter(h => h.videoId === state.currentVideoId)
+    .map(h => h.question)
+    .slice(-10); // Last 10 questions
+  
+  // Get transcript summary (first 3000 chars)
+  let transcriptSummary = '';
+  if (state.transcript) {
+    transcriptSummary = state.transcript
+      .map(t => t.text)
+      .join(' ')
+      .slice(0, 3000);
+  }
+  
+  const prompt = `You are a learning path advisor. Based on the YouTube video content and the user's questions, suggest what they should learn or watch next.
+
+VIDEO TITLE: ${state.videoInfo?.title || 'Unknown'}
+
+VIDEO CONTENT SUMMARY:
+${transcriptSummary || 'No transcript available'}
+
+USER'S QUESTIONS ABOUT THIS VIDEO:
+${videoQuestions.length > 0 ? videoQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n') : 'No questions asked yet'}
+
+Based on this context, suggest 4 recommendations for what the user should watch/learn next. Consider:
+1. Topics they showed interest in (from their questions)
+2. Natural next steps in learning this subject
+3. Related concepts that would deepen their understanding
+4. Practical applications or projects
+
+For each recommendation, provide:
+- A specific topic/title to search for
+- An emoji icon that represents it
+- A brief reason why it's recommended (1-2 sentences)
+- The type: "deep-dive", "related", "practical", or "foundation"
+
+Respond in this exact JSON format:
+{
+  "recommendations": [
+    {
+      "title": "Topic to search for",
+      "icon": "🎯",
+      "reason": "Why this is recommended based on their interests",
+      "type": "deep-dive"
+    }
+  ]
+}
+
+Only respond with valid JSON, no other text.`;
+
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${state.apiKey}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      contents: [{
+        parts: [{ text: prompt }]
+      }],
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 1024,
+      }
+    })
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error?.message || 'API request failed');
+  }
+  
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  
+  // Parse JSON from response
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error('Invalid response format');
+  }
+  
+  const parsed = JSON.parse(jsonMatch[0]);
+  return parsed.recommendations || [];
+}
+
+function renderRecommendations(recommendations) {
+  elements.recsList.innerHTML = recommendations.map(rec => `
+    <div class="rec-card">
+      <div class="rec-card-header">
+        <div class="rec-icon">${rec.icon}</div>
+        <div class="rec-title">
+          ${escapeHtml(rec.title)}
+          <span class="rec-type-badge">${rec.type}</span>
+        </div>
+      </div>
+      <div class="rec-reason">${escapeHtml(rec.reason)}</div>
+      <a href="https://www.youtube.com/results?search_query=${encodeURIComponent(rec.title)}" 
+         target="_blank" 
+         class="rec-search-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        Search on YouTube
+      </a>
+    </div>
+  `).join('');
 }

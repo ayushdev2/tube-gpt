@@ -252,21 +252,33 @@
   }
 
   // ===== Floating Screenshot Button in YouTube Controls =====
+  let buttonRetryCount = 0;
+  const MAX_RETRIES = 10;
+  
   function createFloatingButton() {
     // Check if already exists
-    if (document.getElementById('tubegpt-screenshot-btn')) return;
+    if (document.getElementById('tubegpt-screenshot-btn')) {
+      console.log('[TubeGPT] Screenshot button already exists');
+      return;
+    }
     
     // Find YouTube's right controls (where fullscreen button is)
     const rightControls = document.querySelector('.ytp-right-controls');
     if (!rightControls) {
-      setTimeout(createFloatingButton, 1000);
+      buttonRetryCount++;
+      if (buttonRetryCount < MAX_RETRIES) {
+        console.log('[TubeGPT] Waiting for controls... retry', buttonRetryCount);
+        setTimeout(createFloatingButton, 1000);
+      }
       return;
     }
+
+    console.log('[TubeGPT] Found right controls, adding screenshot button');
 
     // Create button that matches YouTube's style
     const btn = document.createElement('button');
     btn.id = 'tubegpt-screenshot-btn';
-    btn.className = 'ytp-button';
+    btn.className = 'ytp-button tubegpt-screenshot';
     btn.title = 'Take Screenshot (TubeGPT)';
     btn.setAttribute('aria-label', 'Take Screenshot');
     btn.innerHTML = `
@@ -282,11 +294,12 @@
       border: none;
       background: transparent;
       cursor: pointer;
-      display: inline-flex;
+      display: inline-flex !important;
       align-items: center;
       justify-content: center;
       opacity: 0.9;
       transition: opacity 0.1s;
+      vertical-align: top;
     `;
 
     // Hover effect

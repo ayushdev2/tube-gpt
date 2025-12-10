@@ -160,34 +160,58 @@ console.log('[TubeGPT] Content script loading...');
       
       try {
         const video = document.querySelector('video');
-        if (!video) throw new Error('No video found');
+        if (!video) {
+          console.error('[TubeGPT] No video element found');
+          throw new Error('No video found');
+        }
+        
+        // Wait for video to have dimensions
+        if (video.videoWidth === 0 || video.videoHeight === 0) {
+          console.error('[TubeGPT] Video has no dimensions:', video.videoWidth, video.videoHeight);
+          throw new Error('Video not ready');
+        }
+        
+        console.log('[TubeGPT] Capturing video:', video.videoWidth, 'x', video.videoHeight);
         
         const canvas = document.createElement('canvas');
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
-        canvas.getContext('2d').drawImage(video, 0, 0);
+        
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        let dataUrl;
+        try {
+          dataUrl = canvas.toDataURL('image/png');
+        } catch (canvasErr) {
+          console.error('[TubeGPT] Canvas toDataURL failed (CORS?):', canvasErr);
+          throw new Error('Cannot capture - try refreshing the page');
+        }
         
         const screenshot = {
           id: Date.now(),
-          dataUrl: canvas.toDataURL('image/png'),
+          dataUrl: dataUrl,
           timestamp: video.currentTime,
           videoId: new URLSearchParams(location.search).get('v'),
           videoTitle: document.title.replace(' - YouTube', ''),
           createdAt: Date.now()
         };
         
+        console.log('[TubeGPT] Saving screenshot, size:', dataUrl.length);
+        
         const { screenshots = [] } = await chrome.storage.local.get('screenshots');
         screenshots.push(screenshot);
         if (screenshots.length > 100) screenshots.shift();
         await chrome.storage.local.set({ screenshots });
         
+        console.log('[TubeGPT] Screenshot saved successfully');
         btn.innerHTML = '✅';
         showToast('Screenshot saved!');
         
       } catch (err) {
-        console.error('[TubeGPT]', err);
+        console.error('[TubeGPT] Screenshot error:', err.message || err);
         btn.innerHTML = '❌';
-        showToast('Failed to capture', true);
+        showToast(err.message || 'Failed to capture', true);
       }
       
       setTimeout(() => btn.innerHTML = originalText, 1500);

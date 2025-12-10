@@ -905,8 +905,11 @@ function updatePlayPauseButton() {
 }
 
 // ===== Screenshots Panel =====
-function openScreenshots() {
+async function openScreenshots() {
   elements.screenshotsPanel.classList.remove('hidden');
+  // Reload screenshots from storage (in case floating button added new ones)
+  const stored = await chrome.storage.local.get(['screenshots']);
+  state.screenshots = stored.screenshots || [];
   renderScreenshots();
 }
 

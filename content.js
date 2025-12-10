@@ -199,6 +199,11 @@ console.log('[TubeGPT] Content script loading...');
         
         console.log('[TubeGPT] Saving screenshot, size:', dataUrl.length);
         
+        // Check if extension context is still valid
+        if (!chrome.storage?.local) {
+          throw new Error('Extension reloaded - please refresh the page');
+        }
+        
         const { screenshots = [] } = await chrome.storage.local.get('screenshots');
         screenshots.push(screenshot);
         if (screenshots.length > 100) screenshots.shift();
